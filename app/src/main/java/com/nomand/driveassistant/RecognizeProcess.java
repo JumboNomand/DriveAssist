@@ -12,6 +12,7 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.lang.reflect.Field;
+import java.util.HashMap;
 
 import edu.cmu.pocketsphinx.Assets;
 import edu.cmu.pocketsphinx.Hypothesis;
@@ -28,7 +29,11 @@ interface Confirmable {
 public abstract class RecognizeProcess {
     public static String name;
 
-    public abstract void setup(AppCompatActivity context);
+    protected static RecognitionVisualiser visualiser;
+
+    public void setup(AppCompatActivity context){
+        visualiser = (RecognitionVisualiser)context;
+    }
 
     public abstract void switchTo(SpeechRecognizer recognizer);
 
@@ -41,19 +46,27 @@ abstract class KeywordRecognition extends RecognizeProcess{
 }
 
 class MenuRecognition extends KeywordRecognition {
+
     @Override
     public void setup(AppCompatActivity context) {
+        super.setup(context);
         name = "菜单";    // hardcoded
-        File assetDir = (File) RecognizeProcessData.retrieveData(name);
+/*        File assetDir = (File) RecognizeProcessData.retrieveData(name);
         // read from the file to setup menu list
-        BufferedReader loadListReader;
         FileWriter menuWriter;
+        StringBuilder menuString = new StringBuilder();
         try {
-            loadListReader = new BufferedReader(new FileReader(new File(assetDir, "load_list")));
             menuWriter = new FileWriter(new File(assetDir,"menu.kws"));
+
+            for (String key:VoiceListener.recognitionList.keySet()){
+                menuString.append(key);
+                //TODO: change threshold logic
+                menuString.append("/1e-10/\n");
+            }
+            //menuWriter.write(menuString.toString());
         }catch (Exception e){
             throw new RuntimeException(e);
-        }
+        }*/
     }
 
     @Override
@@ -66,20 +79,22 @@ class MenuRecognition extends KeywordRecognition {
         // from the result, get the class of the result and switch to that recognition process
         Class targetClass;
         Field target;
-        try {
-            targetClass = Class.forName(result);
-        } catch (ClassNotFoundException e){
-            // what can I do? Just keep on
+        String nextStep;
+
+        targetClass = VoiceListener.recognitionList.get(result);
+        if (targetClass == null){
+            visualiser.setTTS("我不知道");
             return name;
         }
         try {
-            target = targetClass.getDeclaredField("name");
-        } catch (NoSuchFieldException e){
+            target = targetClass.getField("name");
+            nextStep = (String)target.get(null);
+        } catch (Exception e){
             // fuck me no way
             throw new RuntimeException(e);
         }
 
-        return target.toString();
+        return nextStep;
     }
 }
 

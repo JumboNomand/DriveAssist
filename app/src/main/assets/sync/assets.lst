@@ -1,0 +1,14 @@
+call.gram
+confirm.kws
+digits.gram
+load_list
+menu.kws
+zh_broadcastnews_ptm/feat.params
+zh_broadcastnews_ptm/mdef
+zh_broadcastnews_ptm/means
+zh_broadcastnews_ptm/mixture_weights
+zh_broadcastnews_ptm/noisedict
+zh_broadcastnews_ptm/sendump
+zh_broadcastnews_ptm/transition_matrices
+zh_broadcastnews_ptm/variances
+zh_broadcastnews_utf8.dic

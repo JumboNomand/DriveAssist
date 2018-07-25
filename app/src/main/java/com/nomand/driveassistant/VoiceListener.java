@@ -12,6 +12,7 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.HashMap;
 
 import edu.cmu.pocketsphinx.Hypothesis;
 import edu.cmu.pocketsphinx.RecognitionListener;
@@ -25,6 +26,8 @@ public class VoiceListener implements RecognitionListener {
     private AppCompatActivity context;
 
     private static final int PERMISSIONS_REQUEST_RECORD_AUDIO = 1;
+
+    public static final HashMap<String,Class> recognitionList= new HashMap<>();
 
     // cannot instantiate a VoiceListener
     private VoiceListener(AppCompatActivity context){
@@ -58,7 +61,7 @@ public class VoiceListener implements RecognitionListener {
         RecognitionProcessLoader(assetsDir);
 
         //start listening menu
-
+        recognizer.startListening("菜单");
     }
     // The recognizer can be configured to perform multiple searches
     // of different kind and switch between them
@@ -101,21 +104,45 @@ public class VoiceListener implements RecognitionListener {
             }catch (Exception e){
                 throw new RuntimeException(e);
             }
-            // after we loaded each recognition process, we set it up
+            // after we loaded each recognition process, we put it in map, set it up
+            recognitionList.put(lineArgs[1],recognitionClass);
             tempRP.setup(context);
 
         }
         // hardcode menu setup
         RecognizeProcessData.saveData("菜单",assetsDir);
+        try{
+            recognitionList.put("菜单",Class.forName("com.nomand.driveassistant.MenuRecognition"));
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
         // this setup will write the menu.kws file
-        new MenuRecognition().setup(context);
-        recognizer.addKeywordSearch("菜单",new File(assetsDir, "menu.kws"));
+        (new MenuRecognition()).setup(context);
+        //recognizer.addKeywordSearch("菜单",new File(assetsDir, "menu.kws"));
+        recognizer.addKeyphraseSearch("菜单","打电话");
     }
 
     // used for continuous decoding
     @Override
     public void onPartialResult(Hypothesis hypothesis) {
-        // Command Routing Logic here
+        if (hypothesis == null) return;
+        // Keyword Recognition here
+        String nextStep;
+        String result = hypothesis.getHypstr();
+        String searchName = recognizer.getSearchName();
+        Class recognitionClass = recognitionList.get(searchName);
+        RecognizeProcess tempRP;
+        try {
+            tempRP = (RecognizeProcess) recognitionClass.newInstance();
+            if (recognitionClass.getField("type").get(null) == RecognizeProcessType.KEYWORD){
+                nextStep = tempRP.handler(result);
+                recognitionClass = recognitionList.get(nextStep);
+                tempRP = (RecognizeProcess)(recognitionClass.newInstance());
+                tempRP.switchTo(recognizer);
+            }
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -126,7 +153,7 @@ public class VoiceListener implements RecognitionListener {
     // called when met silence
     @Override
     public void onEndOfSpeech() {
-        recognizer.stop();
+        //recognizer.stop();
     }
 
     // main recognition logic here
@@ -134,7 +161,7 @@ public class VoiceListener implements RecognitionListener {
     public void onResult(Hypothesis hypothesis) {
         if (hypothesis == null) return;
         //TODO: REFACTOR
-        String result = hypothesis.getHypstr();
+
     }
 
     @Override
