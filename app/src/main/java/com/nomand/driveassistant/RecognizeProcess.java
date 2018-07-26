@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.view.Menu;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -15,6 +16,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.lang.reflect.Field;
 import java.util.HashMap;
+import java.util.List;
 
 import edu.cmu.pocketsphinx.Assets;
 import edu.cmu.pocketsphinx.Hypothesis;
@@ -29,9 +31,13 @@ interface Confirmable {
 }
 
 public abstract class RecognizeProcess {
-    public static String name;
+    public String name;
 
     protected static RecognitionVisualiser visualiser;
+
+    public void setName(String name){
+        this.name = name;
+    }
 
     public void setup(AppCompatActivity context){
         visualiser = (RecognitionVisualiser)context;
@@ -48,26 +54,17 @@ abstract class KeywordRecognition extends RecognizeProcess{
 }
 
 class MenuRecognition extends KeywordRecognition {
+    public static String nameStatic;
+
+    @Override
+    public void setName(String name) {
+        super.setName(name);
+        nameStatic = name;
+    }
 
     @Override
     public void setup(AppCompatActivity context) {
         super.setup(context);
-/*        File assetDir = (File) RecognizeProcessData.retrieveData(name);
-        // read from the file to setup menu list
-        FileWriter menuWriter;
-        StringBuilder menuString = new StringBuilder();
-        try {
-            menuWriter = new FileWriter(new File(assetDir,"menu.kws"));
-
-            for (String key:VoiceListener.recognitionList.keySet()){
-                menuString.append(key);
-                //TODO: change threshold logic
-                menuString.append("/1e-10/\n");
-            }
-            //menuWriter.write(menuString.toString());
-        }catch (Exception e){
-            throw new RuntimeException(e);
-        }*/
     }
 
     @Override
@@ -80,14 +77,12 @@ class MenuRecognition extends KeywordRecognition {
     @Override
     public String handler(String result) {
         // from the result, get the class of the result and switch to that recognition process
-        Class targetClass;
-
         // parse the result, take the last keyword recognized
         String[] recognizeList = result.split(" ");
         String nextStep = recognizeList[0];
 
-        targetClass = VoiceListener.recognitionList.get(nextStep);
-        if (targetClass == null){
+        RecognizeProcess tempPR = VoiceListener.recognitionList.get(nextStep);
+        if (tempPR == null){
             visualiser.setText("?");
             visualiser.setTTS("我不知道");
             return name;
@@ -122,14 +117,12 @@ class CallRecognition extends KeywordRecognition{
     @Override
     public String handler(String result) {
         // from the result, get the class of the result and switch to that recognition process
-        Class targetClass;
-
         // parse the result, take the last keyword recognized
         String[] recognizeList = result.split(" ");
         String nextStep = recognizeList[0];
 
-        targetClass = VoiceListener.recognitionList.get(nextStep);
-        if (targetClass == null){
+        RecognizeProcess tempPR = VoiceListener.recognitionList.get(nextStep);
+        if (tempPR == null){
             visualiser.setText("?");
             visualiser.setTTS("我不知道");
             return name;
@@ -144,6 +137,8 @@ class PhoneNumberRecognition extends GrammarRecognition implements Confirmable{
     private static final int PERMISSIONS_REQUEST_READ_CONTACT = 1;
 
     private static final HashMap<String,String> numberMap = new HashMap<>();
+
+    private static String callingNumber;
 
     private void fillNumberMap(){
         numberMap.put("一","1");
@@ -186,15 +181,17 @@ class PhoneNumberRecognition extends GrammarRecognition implements Confirmable{
         String[] recognizeList = result.split(" ");
         if (recognizeList.length < 11) return name;
 
-        visualiser.setText(result);
-        callPhone(result);
-        return null;
+        callingNumber = result;
+        // request confirmation
+        RecognizeProcessData.saveData(ConfirmRecognition.nameStatic,name);
+        return ConfirmRecognition.nameStatic;
     }
 
     @Override
     public String afterConfirmHandler() {
         // well, confirmed, we will call the phone
-        return MenuRecognition.name;
+        callPhone(callingNumber);
+        return MenuRecognition.nameStatic;
     }
 
     private void callPhone(String preNumber){
@@ -211,7 +208,86 @@ class PhoneNumberRecognition extends GrammarRecognition implements Confirmable{
     }
 }
 
+class ContactRecognition extends KeywordRecognition implements Confirmable{
+    private List<Contact> contactList;
+    private String callingNumber;
+
+    @Override
+    public void setup(AppCompatActivity context) {
+        super.setup(context);
+        File assetDir = VoiceListener.assetsDir;
+        // read from the file to setup menu list
+        FileWriter contactWriter;
+        StringBuilder menuString = new StringBuilder();
+
+        contactList = ContactUtil.getContactList(context);
+
+        try {
+            contactWriter = new FileWriter(new File(assetDir,"contacts.kws"),false);
+
+            for (Contact key:contactList){
+                menuString.append(key.name);
+                //TODO: change threshold logic
+                menuString.append("/1e-40/\n");
+            }
+            contactWriter.write(menuString.toString());
+            contactWriter.close();
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void switchTo() {
+        visualiser.setText("请 联系人名");
+    }
+
+    @Override
+    public String handler(String result) {
+        // from the result, get the class of the result and switch to that recognition process
+        visualiser.setText(result);
+        // parse the result, take the last keyword recognized
+        String[] recognizeList = result.split(" ");
+
+        callingNumber = ContactUtil.searchContactList(contactList,recognizeList[0]).phoneNum;
+        if (callingNumber == null) return name;
+        // request confirmation
+        RecognizeProcessData.saveData(ConfirmRecognition.nameStatic,name);
+        return ConfirmRecognition.nameStatic;
+    }
+
+    @Override
+    public String afterConfirmHandler() {
+        callPhone(callingNumber);
+        return MenuRecognition.nameStatic;
+    }
+
+    private void callPhone(String preNumber){
+        // need to filter out all non-number characters
+        String[] numberSect = preNumber.split("[^0-9]");
+        StringBuilder realNumber = new StringBuilder("tel:");
+        for (String number: numberSect){
+            realNumber.append(number);
+        }
+
+        Intent intent = new Intent(Intent.ACTION_CALL);
+        Uri data = Uri.parse(realNumber.toString());
+        intent.setData(data);
+        ((AppCompatActivity)visualiser).startActivity(intent);
+    }
+}
+
 class ConfirmRecognition extends KeywordRecognition{
+
+    private static final String CONFIRM = "确认";
+    public static String nameStatic;
+
+    @Override
+    public void setName(String name) {
+        super.setName(name);
+        nameStatic = name;
+    }
+
     @Override
     public void setup(AppCompatActivity context) {
         super.setup(context);
@@ -223,8 +299,26 @@ class ConfirmRecognition extends KeywordRecognition{
     }
 
     @Override
-    public String handler(String result) {
-        return null;
+    public String handler(String in_result) {
+        // first parse the result
+        String[] resultList = in_result.split(" ");
+        String result = resultList[0];
+
+        String lastStep = (String)RecognizeProcessData.retrieveData(name);
+
+        if (lastStep == null){
+            // TODO:something wrong
+            return MenuRecognition.nameStatic;
+        }
+
+        if (result.equals(CONFIRM)){
+            // call the corresponding after confirm handler
+            return ((Confirmable)(VoiceListener.recognitionList.get(lastStep))).afterConfirmHandler();
+        }else{
+            // go back to previous search
+            return lastStep;
+        }
+
     }
 }
 
