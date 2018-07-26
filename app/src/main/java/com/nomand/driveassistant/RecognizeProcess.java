@@ -1,7 +1,9 @@
 package com.nomand.driveassistant;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -35,7 +37,7 @@ public abstract class RecognizeProcess {
         visualiser = (RecognitionVisualiser)context;
     }
 
-    public abstract void switchTo(SpeechRecognizer recognizer);
+    public abstract void switchTo();
 
     public abstract String handler(String result);
 }
@@ -50,7 +52,6 @@ class MenuRecognition extends KeywordRecognition {
     @Override
     public void setup(AppCompatActivity context) {
         super.setup(context);
-        name = "菜单";    // hardcoded
 /*        File assetDir = (File) RecognizeProcessData.retrieveData(name);
         // read from the file to setup menu list
         FileWriter menuWriter;
@@ -70,28 +71,26 @@ class MenuRecognition extends KeywordRecognition {
     }
 
     @Override
-    public void switchTo(SpeechRecognizer recognizer) {
-        recognizer.startListening(name);
+    public void switchTo() {
+        visualiser.setText("菜单");
+        visualiser.setTTS("主菜单");
+        // wait until speak finish?
     }
 
     @Override
     public String handler(String result) {
         // from the result, get the class of the result and switch to that recognition process
         Class targetClass;
-        Field target;
-        String nextStep;
 
-        targetClass = VoiceListener.recognitionList.get(result);
+        // parse the result, take the last keyword recognized
+        String[] recognizeList = result.split(" ");
+        String nextStep = recognizeList[0];
+
+        targetClass = VoiceListener.recognitionList.get(nextStep);
         if (targetClass == null){
+            visualiser.setText("?");
             visualiser.setTTS("我不知道");
             return name;
-        }
-        try {
-            target = targetClass.getField("name");
-            nextStep = (String)target.get(null);
-        } catch (Exception e){
-            // fuck me no way
-            throw new RuntimeException(e);
         }
 
         return nextStep;
@@ -102,37 +101,93 @@ abstract class GrammarRecognition extends RecognizeProcess{
     public static final RecognizeProcessType type = RecognizeProcessType.GRAMMAR;
 }
 
-class CallRecognition extends GrammarRecognition implements Confirmable{
+class CallRecognition extends KeywordRecognition{
     private static final int PERMISSIONS_REQUEST_CALL_PHONE = 1;
-    private static final int PERMISSIONS_REQUEST_READ_CONTACT = 1;
-
     @Override
     public void setup(AppCompatActivity context) {
-        // request permission to read contacts
-
+        super.setup(context);
         int permissionCheck;
         // Check if user has given permission to call phone
         permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE);
-        if (permissionCheck != PackageManager.PERMISSION_GRANTED) {
+        while (permissionCheck != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(context, new String[]{Manifest.permission.CALL_PHONE}, PERMISSIONS_REQUEST_CALL_PHONE);
-            return;
         }
-        // Check if user has given permission to read contacts
-        permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS);
-        if (permissionCheck != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(context, new String[]{Manifest.permission.READ_CONTACTS}, PERMISSIONS_REQUEST_READ_CONTACT);
-            return;
-        }
-
     }
 
     @Override
-    public void switchTo(SpeechRecognizer recognizer) {
-
+    public void switchTo() {
+        visualiser.setText("打电话 电话号码还是联系人？");
     }
 
     @Override
     public String handler(String result) {
+        // from the result, get the class of the result and switch to that recognition process
+        Class targetClass;
+
+        // parse the result, take the last keyword recognized
+        String[] recognizeList = result.split(" ");
+        String nextStep = recognizeList[0];
+
+        targetClass = VoiceListener.recognitionList.get(nextStep);
+        if (targetClass == null){
+            visualiser.setText("?");
+            visualiser.setTTS("我不知道");
+            return name;
+        }
+
+        return nextStep;
+    }
+}
+
+class PhoneNumberRecognition extends GrammarRecognition implements Confirmable{
+
+    private static final int PERMISSIONS_REQUEST_READ_CONTACT = 1;
+
+    private static final HashMap<String,String> numberMap = new HashMap<>();
+
+    private void fillNumberMap(){
+        numberMap.put("一","1");
+        numberMap.put("二","2");
+        numberMap.put("三","3");
+        numberMap.put("四","4");
+        numberMap.put("五","5");
+        numberMap.put("六","6");
+        numberMap.put("七","7");
+        numberMap.put("八","8");
+        numberMap.put("九","9");
+        numberMap.put("零","0");
+    }
+
+    @Override
+    public void setup(AppCompatActivity context) {
+        super.setup(context);
+        // request permission to read contacts
+        fillNumberMap();
+
+        int permissionCheck;
+        // Check if user has given permission to read contacts
+        permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS);
+        while (permissionCheck != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(context, new String[]{Manifest.permission.READ_CONTACTS}, PERMISSIONS_REQUEST_READ_CONTACT);
+        }
+
+    }
+
+    @Override
+    public void switchTo() {
+        visualiser.setText("请 电话号码");
+    }
+
+    @Override
+    public String handler(String result) {
+        // from the result, get the class of the result and switch to that recognition process
+        visualiser.setText(result);
+        // parse the result, take the last keyword recognized
+        String[] recognizeList = result.split(" ");
+        if (recognizeList.length < 11) return name;
+
+        visualiser.setText(result);
+        callPhone(result);
         return null;
     }
 
@@ -141,17 +196,30 @@ class CallRecognition extends GrammarRecognition implements Confirmable{
         // well, confirmed, we will call the phone
         return MenuRecognition.name;
     }
+
+    private void callPhone(String preNumber){
+        // need to parse and process to real phone number
+        StringBuilder realNumber = new StringBuilder("tel:");
+        String[] digits = preNumber.split(" ");
+        for (String digit:digits){
+            realNumber.append(numberMap.get(digit));
+        }
+        Intent intent = new Intent(Intent.ACTION_CALL);
+        Uri data = Uri.parse(realNumber.toString());
+        intent.setData(data);
+        ((AppCompatActivity)visualiser).startActivity(intent);
+    }
 }
 
 class ConfirmRecognition extends KeywordRecognition{
     @Override
     public void setup(AppCompatActivity context) {
-
+        super.setup(context);
     }
 
     @Override
-    public void switchTo(SpeechRecognizer recognizer) {
-
+    public void switchTo() {
+        visualiser.setText("确认？");
     }
 
     @Override
