@@ -1,5 +1,6 @@
-call.gram
+call.kws
 confirm.kws
+contacts.kws
 digits.gram
 load_list
 menu.kws

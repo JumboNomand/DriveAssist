@@ -1,2 +1,5 @@
-CallRecognition 打电话 digits.gram
+CallRecognition 打电话 call.kws
 ConfirmRecognition 确认 confirm.kws
+MenuRecognition 菜单 menu.kws
+PhoneNumberRecognition 号码 digits.gram
+ContactRecognition 联系人 contacts.kws

@@ -11,6 +11,7 @@ grammar digits;
           六  |
           七  |
           八  |
-          九  ;
+          九  |
+          菜单;
 
 public <digits> = <digit>+;

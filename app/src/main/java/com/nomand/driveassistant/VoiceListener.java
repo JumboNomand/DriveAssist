@@ -21,26 +21,38 @@ import edu.cmu.pocketsphinx.SpeechRecognizerSetup;
 
 public class VoiceListener implements RecognitionListener {
 
+    // speech recognizer
     private static SpeechRecognizer recognizer;
 
+    // a copy of reference of context
     private AppCompatActivity context;
 
+    // recognizer need audio recording permission
     private static final int PERMISSIONS_REQUEST_RECORD_AUDIO = 1;
 
-    public static final HashMap<String,Class> recognitionList= new HashMap<>();
+    // list of recognition process, i.e. states
+    public static final HashMap<String,RecognizeProcess> recognitionList= new HashMap<>();
 
-    // cannot instantiate a VoiceListener
+    // asset directory
+    public static File assetsDir;
+
+    // cannot instantiate a VoiceListener using constructor
     private VoiceListener(AppCompatActivity context){
         this.context = context;
     }
 
+    // one voice listener limited
     public static VoiceListener createListener(AppCompatActivity context){
+        if (context != null) return null;
         return new VoiceListener(context);
     }
 
-    public void setupRecognizer(File assetsDir) throws IOException {
+    public void setupRecognizer(File in_assetsDir) throws IOException {
+        // prevent repeated setup
         if (recognizer != null) return;
         if (context == null) throw new RuntimeException("No context");
+
+        assetsDir = in_assetsDir;
 
         // get record audio permission
         int permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO);
@@ -53,7 +65,6 @@ public class VoiceListener implements RecognitionListener {
         recognizer = SpeechRecognizerSetup.defaultSetup()
                 .setAcousticModel(new File(assetsDir, "zh_broadcastnews_ptm"))
                 .setDictionary(new File(assetsDir, "zh_broadcastnews_utf8.dic"))
-                //.setRawLogDir(assetsDir) // To disable logging of raw audio comment out this call (takes a lot of space on the device)
                 .getRecognizer();
         recognizer.addListener(this);
 
@@ -63,9 +74,11 @@ public class VoiceListener implements RecognitionListener {
         //start listening menu
         recognizer.startListening("菜单");
     }
+
     // The recognizer can be configured to perform multiple searches
     // of different kind and switch between them
     private void RecognitionProcessLoader(File assetsDir){
+        // load recognize process from file
         BufferedReader loadListReader;
         try {
             loadListReader = new BufferedReader(new FileReader(new File(assetsDir, "load_list")));
@@ -90,11 +103,16 @@ public class VoiceListener implements RecognitionListener {
             lineArgs = line.split(" ");
             lineArgs[0] = "com.nomand.driveassistant."+lineArgs[0];
             try {
+                // search for class using reflection
                 recognitionClass = Class.forName(lineArgs[0]);
-                field = recognitionClass.getField("name");
                 tempRP = (RecognizeProcess)recognitionClass.newInstance();
-                field.set(tempRP,lineArgs[1]);
+                tempRP.setName(lineArgs[1]);
 
+                // after we loaded each recognition process, we put it in map, set it up
+                recognitionList.put(lineArgs[1],tempRP);
+                tempRP.setup(context);
+
+                // search loading is different for different type
                 field = recognitionClass.getField("type");
                 if (field.get(null) == RecognizeProcessType.KEYWORD){
                     recognizer.addKeywordSearch(lineArgs[1], new File(assetsDir, lineArgs[2]));
@@ -104,47 +122,50 @@ public class VoiceListener implements RecognitionListener {
             }catch (Exception e){
                 throw new RuntimeException(e);
             }
-            // after we loaded each recognition process, we put it in map, set it up
-            recognitionList.put(lineArgs[1],recognitionClass);
-            tempRP.setup(context);
-
         }
-        // hardcode menu setup
-        RecognizeProcessData.saveData("菜单",assetsDir);
-        try{
-            recognitionList.put("菜单",Class.forName("com.nomand.driveassistant.MenuRecognition"));
-        }catch (Exception e){
-            throw new RuntimeException(e);
-        }
-        // this setup will write the menu.kws file
-        (new MenuRecognition()).setup(context);
-        //recognizer.addKeywordSearch("菜单",new File(assetsDir, "menu.kws"));
-        recognizer.addKeyphraseSearch("菜单","打电话");
     }
 
     // used for continuous decoding
+    // all recognition state transition routed here
     @Override
     public void onPartialResult(Hypothesis hypothesis) {
+        // skip null result
         if (hypothesis == null) return;
-        // Keyword Recognition here
         String nextStep;
         String result = hypothesis.getHypstr();
+
         String searchName = recognizer.getSearchName();
-        Class recognitionClass = recognitionList.get(searchName);
-        RecognizeProcess tempRP;
+        RecognizeProcess tempRP = recognitionList.get(searchName);
         try {
-            tempRP = (RecognizeProcess) recognitionClass.newInstance();
-            if (recognitionClass.getField("type").get(null) == RecognizeProcessType.KEYWORD){
-                nextStep = tempRP.handler(result);
-                recognitionClass = recognitionList.get(nextStep);
-                tempRP = (RecognizeProcess)(recognitionClass.newInstance());
-                tempRP.switchTo(recognizer);
-            }
+            nextStep = tempRP.handler(result);
+            // bad thing happened or no match
+            if (nextStep == null) recognizer.startListening("菜单");
+            // if no recognition process(state) change, do nothing
+            if (nextStep.equals(searchName)) return;
+            // change state
+            tempRP = recognitionList.get(nextStep);
+            recognizer.stop();
+            recognizer.startListening(nextStep);
+            // note stop and start new listening first then update UI/tts, since tts would pause recognize process
+            tempRP.switchTo();
         }catch (Exception e){
             throw new RuntimeException(e);
         }
     }
 
+    // used for pausing recognition process
+    private static String pausedProcess;
+
+    public void pause(){
+        pausedProcess = recognizer.getSearchName();
+        recognizer.stop();
+    }
+
+    public void resume(){
+        recognizer.startListening(pausedProcess);
+    }
+
+    // not used
     @Override
     public void onBeginningOfSpeech() {
 
@@ -154,19 +175,17 @@ public class VoiceListener implements RecognitionListener {
     @Override
     public void onEndOfSpeech() {
         //recognizer.stop();
+        // we don't sleep here
     }
 
-    // main recognition logic here
     @Override
     public void onResult(Hypothesis hypothesis) {
-        if (hypothesis == null) return;
-        //TODO: REFACTOR
-
+        // not used
     }
 
     @Override
     public void onError(Exception e) {
-
+        // not used
     }
     // no timeout in this application
     @Override

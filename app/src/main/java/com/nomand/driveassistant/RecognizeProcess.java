@@ -7,22 +7,11 @@ import android.net.Uri;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.view.Menu;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.FileWriter;
-import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.List;
-
-import edu.cmu.pocketsphinx.Assets;
-import edu.cmu.pocketsphinx.Hypothesis;
-import edu.cmu.pocketsphinx.RecognitionListener;
-import edu.cmu.pocketsphinx.SpeechRecognizer;
-import edu.cmu.pocketsphinx.SpeechRecognizerSetup;
 
 enum RecognizeProcessType {KEYWORD, GRAMMAR}
 
@@ -112,6 +101,7 @@ class CallRecognition extends KeywordRecognition{
     @Override
     public void switchTo() {
         visualiser.setText("打电话 电话号码还是联系人？");
+        visualiser.setTTS("电话号码或联系人");
     }
 
     @Override
@@ -140,6 +130,7 @@ class PhoneNumberRecognition extends GrammarRecognition implements Confirmable{
 
     private static String callingNumber;
 
+    // well number mapping
     private void fillNumberMap(){
         numberMap.put("一","1");
         numberMap.put("二","2");
@@ -171,6 +162,7 @@ class PhoneNumberRecognition extends GrammarRecognition implements Confirmable{
     @Override
     public void switchTo() {
         visualiser.setText("请 电话号码");
+        visualiser.setTTS("请说电话号码");
     }
 
     @Override
@@ -179,9 +171,15 @@ class PhoneNumberRecognition extends GrammarRecognition implements Confirmable{
         visualiser.setText(result);
         // parse the result, take the last keyword recognized
         String[] recognizeList = result.split(" ");
+
+        if (recognizeList[recognizeList.length-1].equals("菜单")) return MenuRecognition.nameStatic;
+
         if (recognizeList.length < 11) return name;
 
         callingNumber = result;
+
+        visualiser.setTTS(callingNumber);
+
         // request confirmation
         RecognizeProcessData.saveData(ConfirmRecognition.nameStatic,name);
         return ConfirmRecognition.nameStatic;
@@ -228,18 +226,23 @@ class ContactRecognition extends KeywordRecognition implements Confirmable{
             for (Contact key:contactList){
                 menuString.append(key.name);
                 //TODO: change threshold logic
-                menuString.append("/1e-40/\n");
+                menuString.append("/1e-45/\n");
             }
+            // add back to menu functionality
+            menuString.append("菜单/1e-45/\n");
             contactWriter.write(menuString.toString());
             contactWriter.close();
         }catch (Exception e){
             throw new RuntimeException(e);
         }
+
+
     }
 
     @Override
     public void switchTo() {
         visualiser.setText("请 联系人名");
+        visualiser.setTTS("请说联系人");
     }
 
     @Override
@@ -249,8 +252,14 @@ class ContactRecognition extends KeywordRecognition implements Confirmable{
         // parse the result, take the last keyword recognized
         String[] recognizeList = result.split(" ");
 
+        if (recognizeList[0].equals("菜单")) return MenuRecognition.nameStatic;
+
         callingNumber = ContactUtil.searchContactList(contactList,recognizeList[0]).phoneNum;
         if (callingNumber == null) return name;
+
+        // speak the contact name
+        visualiser.setTTS(recognizeList[0]);
+
         // request confirmation
         RecognizeProcessData.saveData(ConfirmRecognition.nameStatic,name);
         return ConfirmRecognition.nameStatic;
@@ -296,6 +305,7 @@ class ConfirmRecognition extends KeywordRecognition{
     @Override
     public void switchTo() {
         visualiser.setText("确认？");
+        visualiser.setTTS("确认或取消？");
     }
 
     @Override
@@ -321,10 +331,4 @@ class ConfirmRecognition extends KeywordRecognition{
 
     }
 }
-
-
-
-
-    // Check if user has given permission to record audio
-
 

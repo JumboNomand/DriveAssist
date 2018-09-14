@@ -24,12 +24,22 @@ public class ContactUtil {
 
         return contactList;
     }
+
+    public static Contact searchContactList(List<Contact> list, String name){
+
+        for (Contact contact:list){
+            if (contact.name.equals(name))
+                return contact;
+        }
+
+        return null;
+    }
 }
 
 class Contact {
     //private int id;
-    private String name;
-    private String phoneNum;
+    public String name;
+    public String phoneNum;
 
     public Contact (String name, String phoneNum){
         this.name = name;
