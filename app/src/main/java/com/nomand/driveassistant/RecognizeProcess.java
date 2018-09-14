@@ -13,8 +13,10 @@ import java.io.FileWriter;
 import java.util.HashMap;
 import java.util.List;
 
+// type used when setting up keyword / grammar recognition
 enum RecognizeProcessType {KEYWORD, GRAMMAR}
 
+// used for recognition process that needs confirmation
 interface Confirmable {
     String afterConfirmHandler();
 }
@@ -22,19 +24,27 @@ interface Confirmable {
 public abstract class RecognizeProcess {
     public String name;
 
+    // each recognize process have a visualiser, well the activity
     protected static RecognitionVisualiser visualiser;
 
+    // name is read from load_list
     public void setName(String name){
         this.name = name;
     }
 
+    // setup during initialization
     public void setup(AppCompatActivity context){
         visualiser = (RecognitionVisualiser)context;
     }
 
+    // preparation before been switch to
     public abstract void switchTo();
 
-    public abstract String handler(String result);
+    // handler that handles the recognition result and next step routing logic
+    public String handler(String result){
+        // default null so that it would go back to menu
+        return null;
+    }
 }
 
 abstract class KeywordRecognition extends RecognizeProcess{
@@ -60,7 +70,6 @@ class MenuRecognition extends KeywordRecognition {
     public void switchTo() {
         visualiser.setText("菜单");
         visualiser.setTTS("主菜单");
-        // wait until speak finish?
     }
 
     @Override
@@ -111,6 +120,8 @@ class CallRecognition extends KeywordRecognition{
         String[] recognizeList = result.split(" ");
         String nextStep = recognizeList[0];
 
+
+        // notice that the string of next step should be
         RecognizeProcess tempPR = VoiceListener.recognitionList.get(nextStep);
         if (tempPR == null){
             visualiser.setText("?");
@@ -172,12 +183,15 @@ class PhoneNumberRecognition extends GrammarRecognition implements Confirmable{
         // parse the result, take the last keyword recognized
         String[] recognizeList = result.split(" ");
 
-        if (recognizeList[recognizeList.length-1].equals("菜单")) return MenuRecognition.nameStatic;
+        // if the user changes idea
+        if (recognizeList[recognizeList.length-1].equals(MenuRecognition.nameStatic)) return MenuRecognition.nameStatic;
 
+        // NOTE: phone number in China is 11 digits!
         if (recognizeList.length < 11) return name;
 
         callingNumber = result;
 
+        // tell the user the number that will be called
         visualiser.setTTS(callingNumber);
 
         // request confirmation
@@ -218,9 +232,11 @@ class ContactRecognition extends KeywordRecognition implements Confirmable{
         FileWriter contactWriter;
         StringBuilder menuString = new StringBuilder();
 
+        // get contact list
         contactList = ContactUtil.getContactList(context);
 
         try {
+            // fill the contact kws file
             contactWriter = new FileWriter(new File(assetDir,"contacts.kws"),false);
 
             for (Contact key:contactList){
@@ -278,7 +294,7 @@ class ContactRecognition extends KeywordRecognition implements Confirmable{
         for (String number: numberSect){
             realNumber.append(number);
         }
-
+        // call
         Intent intent = new Intent(Intent.ACTION_CALL);
         Uri data = Uri.parse(realNumber.toString());
         intent.setData(data);

@@ -95,8 +95,15 @@ public class MainActivity extends AppCompatActivity implements
     protected void onStop() {
         super.onStop();
         tts.stop();
+        voiceListener.pause();
         // don't shut down tts when this app is no longer visible
         //tts.shutdown();
+    }
+
+    @Override
+    protected void onRestart() {
+        super.onRestart();
+        voiceListener.resume();
     }
 
     @Override
