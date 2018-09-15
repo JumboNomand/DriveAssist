@@ -32,8 +32,12 @@ But in general, keyword recognition is prone to error, and kinda not user-friend
 a sentence and understanding command from the sentence is a better approach, which is also
 closer to the idea of a voice assistant.
 
-CMU-Sphinx uses Hidden Markov Model for recognizing process, but it is proven that Neural 
-Network outperforms HMM when recognizing in terms of . 
+Also, telling phone numbers fast is a big big trouble, especially repeatative numbers. Mixed up phonetics 
+will make continuous phone number recognition almost never right.
+
+CMU-Sphinx uses Hidden Markov Model for recognizing process, but it is proven that Neural Network
+reinfored HMM could perform better. So it is my next objective. With sentences, language model is almost a must, 
+which could tell which word is more likely to appear after.
 
 ## Setup & Running
 
@@ -45,4 +49,3 @@ responding even if the main menu shows up.
 There will be a video demo link here.
 
 Sorry, it is in Chinese.
-
