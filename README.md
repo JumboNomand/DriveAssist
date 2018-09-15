@@ -9,6 +9,8 @@ https://cmusphinx.github.io/wiki/tutorialandroid/
 
 NOTE: This project uses Mandarin Chinese, including voice dictionary, UI content, and tts voice. 
 
+Here is a demo video: https://youtu.be/f5bPzCyiaxM
+
 ## Programming Idea
 
 Basically, this whole project is a keyword recognition state machine. Each keyword recognition 
@@ -45,7 +47,3 @@ Checkout this project from Android Studio, the IDE should download all dependenc
 
 After the app is installed and started up, it should take a while (roughly 30s) to start 
 responding even if the main menu shows up. 
-
-There will be a video demo link here.
-
-Sorry, it is in Chinese.
